@@ -5,8 +5,11 @@ import std.file;
 import std.path;
 import std.exception;
 import std.regex;
-//import std.algorithm;
 import std.string;
+import std.conv;
+import core.stdc.stdlib;
+import std.datetime;
+
 
 /** 
  * 
@@ -28,23 +31,172 @@ import std.string;
 
 //functions block
 
-void scanSubEntries(string entry){
-    foreach(string subEntry; dirEntries(entry, SpanMode.breadth)){
-        writeln("Sub Entry: ", subEntry);
-        if(isFile(subEntry)){
-            writeln("Sub Entry is a file: ", subEntry);
-            writeln("No subdirectories to scan further");
-        }
-        else if(isDir(subEntry)){
-            writeln("Sub Entry is a directory: ", subEntry);
-            // recursively open directories and get its entries
-            scanSubEntries(subEntry);
-        }
-        else{
-            writeln("Sub Entry is invalid: ", subEntry);
-        }
+
+string printHeading(bool color){
+    string blue = "\033[34m";
+    string reset = "\033[0m";  // Reset color to default
+    string res="";
+
+    if(!color){
+        res=("SUMMARY---------------");
     }
+    else{
+       res= blue~("SUMMARY---------------");
+    }
+    return res;
 }
+
+string printTailing(bool color){
+    string blue = "\033[34m";
+    string reset = "\033[0m";  // Reset color to default
+    string res="";
+
+    if(!color){
+        res=("END SUMMARY---------------");
+    }
+    else{
+       res= blue~("END SUMMARY---------------");
+    }
+    return res; 
+}
+
+string reding(Captures!(string) m){
+    string red = "\033[31m";
+    string reset = "\033[0m";  // Reset color to default
+    return red~m.hit~reset;
+  
+}
+
+string highlightMatch(string line, Regex!char regex, bool color){
+    string blue = "\033[34m";
+    string red = "\033[31m";
+    string green = "\033[32m";
+    
+    string res="";
+
+    if(!color){
+        res=line;
+    }
+    else{
+        //somehow to review the replaceAll function TODO
+        res= replaceAll!(reding)(line, regex);
+    }
+    return res;
+}
+
+void  readFile( File file, string entry, Regex!char regex, int after_context, int before_context, int context, bool no_heading, bool color){
+
+                            string blue = "\033[34m";
+                            string red = "\033[31m";
+                            string green = "\033[32m";
+                            string reset = "\033[0m";  // Reset color to default
+
+
+                                string line;
+                                int lineNumber = 0;
+                               // string [int] preArray=null;
+                               // string [int] postArray=null;
+                                int numberMatchedPatternPerFile=0;
+                                string [int] arrayMatchedLinesToLineNumber;
+                                string [int] keeperArray=null; //holds the whole file content at the end
+                            
+                            
+                                 while(!file.eof()){
+                                    lineNumber++;
+                                    line = file.readln();
+                                    keeperArray[lineNumber]=line;
+
+                                    auto allMatches=matchAll(line, regex);
+                                    if(!allMatches.empty){
+                                         //counting number of pattern matched in this line and incrementing counter for the file 
+                                        
+                                        int count=0;
+                                        foreach (_; allMatches) {
+                                                count++;
+                                            }
+                                        numberMatchedPatternPerFile+=count;
+                                        arrayMatchedLinesToLineNumber[lineNumber]=line;
+                                
+                                    }
+
+                                }
+
+
+                                if(numberMatchedPatternPerFile!=0){
+                                    //check if no_heading is set
+                                    if(no_heading){
+                                        
+                                       writeln(printHeading(color),entry,"-------------(",numberMatchedPatternPerFile,")");
+                                       writeln(reset);
+                            
+
+                                        foreach (key, value; arrayMatchedLinesToLineNumber)
+                                        {   
+                                             //fetching the context of the matched lines
+                                            if(before_context)
+                                            {
+                                                for(int i=1; i<=before_context; i++){
+                                                    if(key-i>0){
+                                                        writeln("Before Context of ->", red~entry~reset,":"~green,key-i,reset~":", highlightMatch(keeperArray[key-i], regex, color));
+                                                    }
+                                                }
+                                            }
+                                            writeln(red~entry~reset,":"~green,key,reset~":",highlightMatch(value, regex, color));
+                                                
+                                            //fetching the context of the matched lines
+                                            if(after_context){
+                                                for(int i=1; i<=after_context; i++){
+                                                    if(key+i<=keeperArray.length){
+                                                        writeln("After Context of ->", red~entry~reset,":"~green,key+i,reset~":", highlightMatch(keeperArray[key+i], regex, color));
+                                                    }
+                                                }
+                                            }
+                                       
+                                        writeln("-------------------------------------------------");
+                                        }
+                                        writeln(printTailing(color),entry);
+                                        writeln(reset);
+                                    }
+                                    else{
+                                         writeln(red~printHeading(color),entry,"-------------(",numberMatchedPatternPerFile,")");
+                                        writeln(reset);
+
+                                        foreach (key, value; arrayMatchedLinesToLineNumber)
+                                        {
+                                             //fetching the context of the matched lines
+                                            if(before_context){
+                                                for(int i=1; i<=before_context; i++){
+                                                    if(key-i>0){
+                                                        writeln("Before Context:-> "~green,key-i,reset~":",highlightMatch(keeperArray[key-i], regex, color));
+                                                    }
+                                                }
+                                            }
+
+                                            writeln(green~"",key,""~reset,":",highlightMatch(value, regex, color));
+                                            
+                                             //fetching the context of the matched lines
+                                            if(after_context){
+                                                for(int i=1; i<=after_context; i++){
+                                                    if(key+i<=keeperArray.length){
+                                                        writeln("After Context:-> "~green,key+i,reset~":",highlightMatch(keeperArray[key+i], regex, color));
+                                                    }
+                                                }
+                                            }
+
+                                        writeln("-------------------------------------------------");
+                                        }
+                                        writeln(printTailing(color),entry);
+                                        writeln(reset);
+                                    }
+
+
+                                }else{
+                                    writeln(green, "No match found in this file",entry);
+                                    writeln(reset);
+                                }
+              
+}
+
 
 
 // unit test block
@@ -56,20 +208,22 @@ unittest
 
 void main(string[] args) {
 
+    auto start = Clock.currTime; // Record start time
 
     //Variable list:
 
-    string after_context = "";
-    string before_context = "";
-    string context ="";
-    string color = "";  
+    int after_context;
+    int before_context;
+    int context;
+    bool color = false;  
     bool hidden = false;
     bool ignore_case = false;
+    string flags = "";
     bool no_heading = false;
     string pattern = "";
     string paths = "";
 
-    string blue = "\033[34m";
+   string blue = "\033[34m";
     string red = "\033[31m";
     string green = "\033[32m";
     string reset = "\033[0m";  // Reset color to default
@@ -85,16 +239,18 @@ void main(string[] args) {
     else{
         for(int i=0; i< args.length; i++){
             if(args[i] == "-A" || args[i] == "--after-context"){
-                after_context = args[i+1];
+
+             after_context= to!int(args[i+1]);
+               
             }
             else if(args[i] == "-B" || args[i] == "--before-context"){
-                before_context = args[i+1];
-            }
+               before_context= to!int(args[i+1]);
+            }   
             else if(args[i] == "-C" || args[i] == "--context"){
-                context = args[i+1];
+                context= to!int(args[i+1]);
             }
             else if(args[i] == "-c" || args[i] == "--color"){
-                color = "\033[34m";
+                color = true;
             }
             else if(args[i] == "-h" || args[i] == "--hidden"){
                 hidden = true;
@@ -117,6 +273,7 @@ void main(string[] args) {
                 writeln("--no-heading prints a single line including the filenamefor each match, instead of grouping matches by file");
                 writeln("--PATTERN: the regular expression to search for");
                 writeln("--PATH: the file or directory to search in ");
+                exit(0);
             }
             else if(args[i] == "--PATTERN"){
                 for(int j=i+1; j < args.length; j++){
@@ -149,27 +306,13 @@ void main(string[] args) {
     writeln("Pattern: ", pattern);
     writeln("Paths: ", paths);
 
+
     // check if pattern is empty and or path is emptys
     if(pattern == "" || paths == ""){
         writeln("Pattern and Path are required");
         writeln("Usage: searcher [OPTIONS] PATTERN [PATH ...]");
     }
     else{
-        //check if path is a file or directory
-        //if file
-        //open file
-        //read file
-        //apply regex
-        //print matches number line, number of matches, match, line content
-        //else if directory
-        //open directory
-        //read files
-        // recursively open directories 
-        //
-        //apply regex
-        //print matches number line, number of matches, match, line content
-        //else
-        //print error
 
         /*
         * handling the separation of the paths in the paths string in the case of multiple paths
@@ -178,10 +321,13 @@ void main(string[] args) {
         string[] pathList = strip(paths).split("|");
 
         /*
-        * handling the PATTERN
+        * handling the PATTERN and case insensitive flag
         */
        //string tempPattern = std.string.strip(pattern);
-        auto regex = regex(strip(pattern));
+        if(ignore_case){
+            flags = "i";
+        }
+        auto regex = regex(strip(pattern), flags);
         writeln("Pattern in regex: ", regex);
 
          /*
@@ -205,31 +351,24 @@ void main(string[] args) {
                             if(isFile(entry)){
                                 writeln("Entry is a file: ", entry);
 
-                                //open file and search for pattern
-                                auto file = File(entry, "r");
-                                string line;
-                                int lineNumber = 0;
-                                while(!file.eof()){
-                                    lineNumber++;
-                                    line = file.readln();
+                                if(hidden){
+                                   if( baseName(entry).startsWith("."))
+                                   {
+                                     writeln("Hidden file: ", entry);
+                                     readFile(File(entry, "r"), entry, regex, after_context, before_context, context, no_heading,color);
 
-                                    auto firstMatch = matchFirst(line, regex);
-                                    //assert(!firstMatch.empty, "No match found");
-                                    if(!firstMatch.empty){
-                                        writeln(green,"Match found in line: ", lineNumber);
-                                        writeln(green,"Match: ", firstMatch.hit);
-                                        writeln(green,"Line content: ", line);
-                                        writeln(reset);
+                                    }else
+                                    {
+                                        continue;
                                     }
-                                    
+
+                                }else{
+                                    readFile(File(entry, "r"), entry, regex, after_context, before_context, context, no_heading,color);
                                 }
-                        
+
                             }
                             else if(isDir(entry)){
                                 writeln(blue,"Entry is a directory: ", entry);
-                                // recursively open directories and get its entries
-                                //scanSubEntries(entry);
-                               // writeln(blue,"finished scanning subdirectories",path);
                                 writeln(reset);
 
                             }
@@ -242,6 +381,24 @@ void main(string[] args) {
                     }
                     else if(isFile(path)){
                         writeln("Path is a file: ", path);
+                         if(hidden){
+                            if( baseName(path).startsWith("."))
+                            {
+                                writeln("Hidden file: ", path);
+                                readFile(File(path, "r"), path, regex, after_context, before_context, context, no_heading,color);
+
+                            }else
+                            {
+                                continue;
+                            }
+
+                            }
+                            else if(!hidden){
+                                readFile(File(path, "r"), path, regex, after_context, before_context, context, no_heading,color);
+                            }
+                            else{
+                                writeln(green,"No match found in this file:  ", path);
+                            }
                        
                     }
                     else{
@@ -260,13 +417,9 @@ void main(string[] args) {
                 writeln(reset);
             }
         }
-
-    
-
-
+     auto end = Clock.currTime;   // Record end time
+    auto duration = end - start; // Calculate duration
+    writeln("Execution time: ", duration.msecs, " milliseconds");
     }
-
-
     
-
 }
