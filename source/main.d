@@ -9,10 +9,12 @@ import std.string;
 import std.conv;
 import core.stdc.stdlib;
 import std.datetime;
+import std.utf;
+import std.parallelism;
 
 
-/** 
- * 
+/** @brief PARALLEL SEARCHER
+ * @brief PARALLEL SEARCHER
  * usage: searcher [OPTIONS] PATTERN [PATH ...]
 -A,--after-context <arg> prints the given number of following lines for each match
 -B,--before-context <arg> prints the given number of preceding lines for each match
@@ -100,6 +102,8 @@ void  readFile( File file, string entry, Regex!char regex, int after_context, in
                                 string [int] arrayMatchedLinesToLineNumber;
                                 string [int] keeperArray=null; //holds the whole file content at the end
                             
+                            //checking encoding and others
+                            try{
                             
                                  while(!file.eof()){
                                     lineNumber++;
@@ -130,24 +134,24 @@ void  readFile( File file, string entry, Regex!char regex, int after_context, in
                                        writeln(reset);
                             
 
-                                        foreach (key, value; arrayMatchedLinesToLineNumber)
+                                        foreach (kv; parallel(arrayMatchedLinesToLineNumber.byPair,100))
                                         {   
                                              //fetching the context of the matched lines
                                             if(before_context)
                                             {
                                                 for(int i=1; i<=before_context; i++){
-                                                    if(key-i>0){
-                                                        writeln("Before Context of ->", red~entry~reset,":"~green,key-i,reset~":", highlightMatch(keeperArray[key-i], regex, color));
+                                                    if(kv.key-i>0){
+                                                        writeln("Before Context of ->", red~entry~reset,":"~green,kv.key-i,reset~":", highlightMatch(keeperArray[to!int(kv.key-i)], regex, color));
                                                     }
                                                 }
                                             }
-                                            writeln(red~entry~reset,":"~green,key,reset~":",highlightMatch(value, regex, color));
+                                            writeln(red~entry~reset,":"~green,kv.key,reset~":",highlightMatch(kv.value, regex, color));
                                                 
                                             //fetching the context of the matched lines
                                             if(after_context){
                                                 for(int i=1; i<=after_context; i++){
-                                                    if(key+i<=keeperArray.length){
-                                                        writeln("After Context of ->", red~entry~reset,":"~green,key+i,reset~":", highlightMatch(keeperArray[key+i], regex, color));
+                                                    if(kv.key+i<=keeperArray.length){
+                                                        writeln("After Context of ->", red~entry~reset,":"~green,kv.key+i,reset~":", highlightMatch(keeperArray[to!int(kv.key+i)], regex, color));
                                                     }
                                                 }
                                             }
@@ -161,24 +165,24 @@ void  readFile( File file, string entry, Regex!char regex, int after_context, in
                                          writeln(red~printHeading(color),entry,"-------------(",numberMatchedPatternPerFile,")");
                                         writeln(reset);
 
-                                        foreach (key, value; arrayMatchedLinesToLineNumber)
+                                        foreach (kv; parallel(arrayMatchedLinesToLineNumber.byPair,100))
                                         {
                                              //fetching the context of the matched lines
                                             if(before_context){
                                                 for(int i=1; i<=before_context; i++){
-                                                    if(key-i>0){
-                                                        writeln("Before Context:-> "~green,key-i,reset~":",highlightMatch(keeperArray[key-i], regex, color));
+                                                    if(kv.key-i>0){
+                                                        writeln("Before Context:-> "~green,kv.key-i,reset~":",highlightMatch(keeperArray[to!int(kv.key-i)], regex, color));
                                                     }
                                                 }
                                             }
 
-                                            writeln(green~"",key,""~reset,":",highlightMatch(value, regex, color));
+                                            writeln(green~"",kv.key,""~reset,":",highlightMatch(kv.value, regex, color));
                                             
                                              //fetching the context of the matched lines
                                             if(after_context){
                                                 for(int i=1; i<=after_context; i++){
-                                                    if(key+i<=keeperArray.length){
-                                                        writeln("After Context:-> "~green,key+i,reset~":",highlightMatch(keeperArray[key+i], regex, color));
+                                                    if(kv.key+i<=keeperArray.length){
+                                                        writeln("After Context:-> "~green,kv.key+i,reset~":",highlightMatch(keeperArray[to!int(kv.key+i)], regex, color));
                                                     }
                                                 }
                                             }
@@ -191,10 +195,16 @@ void  readFile( File file, string entry, Regex!char regex, int after_context, in
 
 
                                 }else{
-                                    writeln(green, "No match found in this file",entry);
+                                    writeln(green, "No match found in this file for::",entry);
                                     writeln(reset);
                                 }
-              
+                            }catch(UTFException){
+                                writeln(red,"File encoding not supported::",entry);
+                                writeln(reset);
+                            }catch(Exception e){
+                                writeln(red,"Error reading file ::",entry);
+                                writeln(reset);
+                            }
 }
 
 
@@ -248,6 +258,8 @@ void main(string[] args) {
             }   
             else if(args[i] == "-C" || args[i] == "--context"){
                 context= to!int(args[i+1]);
+                before_context= to!int(args[i+1]);
+                after_context= to!int(args[i+1]);
             }
             else if(args[i] == "-c" || args[i] == "--color"){
                 color = true;
@@ -262,7 +274,7 @@ void main(string[] args) {
                 no_heading = true;
             }
             else if(args[i] == "--help"){
-                writeln("usage: searcher [OPTIONS] PATTERN [PATH ...]");
+                writeln("usage(PARALLEL): searcher [OPTIONS] PATTERN [PATH ...]");
                 writeln("-A,--after-context <arg> prints the given number of following lines for each match");
                 writeln("-B,--before-context <arg> prints the given number of preceding lines for each match");
                 writeln("-c,--color print with colors, highlighting the matched phrase in the output");
@@ -291,6 +303,10 @@ void main(string[] args) {
                     paths = paths~"|"~args[j];
                 }   
             }
+           // else{
+           //      writeln("usage: searcher --help");
+           //      exit(0);
+            //}
         } 
 
     }
@@ -334,7 +350,7 @@ void main(string[] args) {
         * checking if the path is a file or a directory
         */
 
-        foreach(path; pathList){
+        foreach(path; parallel(pathList,1)){
             writeln("Path being handled:",path);
             if(isValidPath(path) && path != ""){
                 writeln("Path is valid: ",path);
@@ -419,7 +435,7 @@ void main(string[] args) {
         }
      auto end = Clock.currTime;   // Record end time
     auto duration = end - start; // Calculate duration
-    writeln("Execution time: ", duration.msecs, " milliseconds");
+    writeln("Execution time: ", duration.total!"msecs", " milliseconds");
     }
     
 }
