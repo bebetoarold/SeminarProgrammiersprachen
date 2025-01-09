@@ -258,9 +258,7 @@ void main(string[] args)
 
     auto start = Clock.currTime; // Record start time
 
-    //Variable list:
-
-    int D_THREAD_POOL_SIZE=4;   
+    //Variable list:  
     int after_context;
     int before_context;
     int context;
